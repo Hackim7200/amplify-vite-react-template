@@ -4,8 +4,10 @@ import { generateClient } from "aws-amplify/data";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 
 const client = generateClient<Schema>();
+
 function App() {
   const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
+  const [newTodoContent, setNewTodoContent] = useState("");
   const { user, signOut } = useAuthenticator();
 
   useEffect(() => {
@@ -14,34 +16,84 @@ function App() {
     });
   }, []);
 
-  function createTodo() {
-    client.models.Todo.create({ content: window.prompt("Todo content") });
+  async function createTodo() {
+    if (!newTodoContent.trim()) return;
+
+    try {
+      await client.models.Todo.create({
+        content: newTodoContent.trim(),
+        isDone: false,
+        date: new Date().toISOString(),
+        breakdown: [],
+      });
+      setNewTodoContent("");
+    } catch (error) {
+      console.error("Error creating todo:", error);
+    }
   }
 
-  function deleteTodo(id: string) {
-    client.models.Todo.delete({ id });
+  async function toggleTodo(id: string, currentStatus: boolean) {
+    try {
+      await client.models.Todo.update({
+        id,
+        isDone: !currentStatus,
+      });
+    } catch (error) {
+      console.error("Error updating todo:", error);
+    }
+  }
+
+  async function deleteTodo(id: string) {
+    try {
+      await client.models.Todo.delete({ id });
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+    }
   }
 
   return (
-    <main>
-      <h1>{user?.signInDetails?.loginId}'s todos</h1>
-      <button onClick={createTodo}>+ new</button>
-      <ul>
-        {todos.map((todo) => (
-          <li onClick={() => deleteTodo(todo.id)} key={todo.id}>
-            {todo.content}
-          </li>
-        ))}
-      </ul>
-      <div>
-        🥳 App successfully hosted. Try creating a new todo.
-        <br />
-        <a href="https://docs.amplify.aws/react/start/quickstart/#make-frontend-updates">
-          Review next step of this tutorial.
-        </a>
+    <div className="app">
+      <header>
+        <h1>{user?.signInDetails?.loginId}'s Todo List</h1>
+        <button onClick={signOut}>Sign out</button>
+      </header>
+
+      <div className="add-todo">
+        <input
+          type="text"
+          value={newTodoContent}
+          onChange={(e) => setNewTodoContent(e.target.value)}
+          placeholder="Add new todo..."
+          onKeyPress={(e) => e.key === "Enter" && createTodo()}
+        />
+        <button onClick={createTodo}>Add</button>
       </div>
-      <button onClick={signOut}>Sign out</button>
-    </main>
+
+      <div className="todos">
+        {todos.length === 0 ? (
+          <p>No todos yet. Add one above!</p>
+        ) : (
+          todos.map((todo) => (
+            <div
+              key={todo.id}
+              className={`todo ${todo.isDone ? "completed" : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={todo.isDone}
+                onChange={() => toggleTodo(todo.id, todo.isDone)}
+              />
+              <span>{todo.content}</span>
+              <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <footer>
+        {todos.filter((todo) => todo.isDone).length} of {todos.length} completed
+      </footer>
+    </div>
   );
 }
 
